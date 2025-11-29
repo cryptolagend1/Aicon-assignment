@@ -335,3 +335,272 @@ func TestGetValidCategories(t *testing.T) {
 	assert.Equal(t, expected, categories)
 	assert.Len(t, categories, 5)
 }
+
+func TestItem_UpdatePartial(t *testing.T) {
+	tests := []struct {
+		name          string
+		initialName   string
+		initialBrand  string
+		initialPrice  int
+		newName       *string
+		newBrand      *string
+		newPrice      *int
+		wantErr       bool
+		expectedErr   string
+		checkName     string
+		checkBrand    string
+		checkPrice    int
+		checkUpdated  bool
+	}{
+		{
+			name:         "正常系: nameのみ更新",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      stringPtr("更新された名前"),
+			newBrand:     nil,
+			newPrice:     nil,
+			wantErr:      false,
+			checkName:    "更新された名前",
+			checkBrand:   "初期ブランド",
+			checkPrice:   100000,
+			checkUpdated: true,
+		},
+		{
+			name:         "正常系: brandのみ更新",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      nil,
+			newBrand:     stringPtr("更新されたブランド"),
+			newPrice:     nil,
+			wantErr:      false,
+			checkName:    "初期アイテム",
+			checkBrand:   "更新されたブランド",
+			checkPrice:   100000,
+			checkUpdated: true,
+		},
+		{
+			name:         "正常系: purchase_priceのみ更新",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      nil,
+			newBrand:     nil,
+			newPrice:     intPtr(200000),
+			wantErr:      false,
+			checkName:    "初期アイテム",
+			checkBrand:   "初期ブランド",
+			checkPrice:   200000,
+			checkUpdated: true,
+		},
+		{
+			name:         "正常系: nameとbrandを更新",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      stringPtr("新しい名前"),
+			newBrand:     stringPtr("新しいブランド"),
+			newPrice:     nil,
+			wantErr:      false,
+			checkName:    "新しい名前",
+			checkBrand:   "新しいブランド",
+			checkPrice:   100000,
+			checkUpdated: true,
+		},
+		{
+			name:         "正常系: 全フィールド更新",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      stringPtr("最終的な名前"),
+			newBrand:     stringPtr("最終的なブランド"),
+			newPrice:     intPtr(300000),
+			wantErr:      false,
+			checkName:    "最終的な名前",
+			checkBrand:   "最終的なブランド",
+			checkPrice:   300000,
+			checkUpdated: true,
+		},
+		{
+			name:         "正常系: purchase_priceを0に設定",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      nil,
+			newBrand:     nil,
+			newPrice:     intPtr(0),
+			wantErr:      false,
+			checkName:    "初期アイテム",
+			checkBrand:   "初期ブランド",
+			checkPrice:   0,
+			checkUpdated: true,
+		},
+		{
+			name:         "異常系: nameが空文字",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      stringPtr(""),
+			newBrand:     nil,
+			newPrice:     nil,
+			wantErr:      true,
+			expectedErr:  "name is required",
+		},
+		{
+			name:         "異常系: nameが100文字超過",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      stringPtr("ロレックス デイトナ 16520 18K イエローゴールド ブラック文字盤 自動巻き クロノグラフ メンズ 腕時計 1988年製 ヴィンテージ 希少 コレクション アイテム"),
+			newBrand:     nil,
+			newPrice:     nil,
+			wantErr:      true,
+			expectedErr:  "name must be 100 characters or less",
+		},
+		{
+			name:         "異常系: brandが空文字",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      nil,
+			newBrand:     stringPtr(""),
+			newPrice:     nil,
+			wantErr:      true,
+			expectedErr:  "brand is required",
+		},
+		{
+			name:         "異常系: brandが100文字超過",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      nil,
+			newBrand:     stringPtr("ROLEX SA Geneva Switzerland Official Authorized Dealer Store Premium Collection Limited Edition Special"),
+			newPrice:     nil,
+			wantErr:      true,
+			expectedErr:  "brand must be 100 characters or less",
+		},
+		{
+			name:         "異常系: purchase_priceが負の値",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      nil,
+			newBrand:     nil,
+			newPrice:     intPtr(-1),
+			wantErr:      true,
+			expectedErr:  "purchase_price must be 0 or greater",
+		},
+		{
+			name:         "異常系: 複数のバリデーションエラー",
+			initialName:  "初期アイテム",
+			initialBrand: "初期ブランド",
+			initialPrice: 100000,
+			newName:      stringPtr(""),
+			newBrand:     stringPtr(""),
+			newPrice:     intPtr(-1),
+			wantErr:      true,
+			expectedErr:  "name is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 各テストで新しいアイテムを作成
+			item, err := NewItem(tt.initialName, "時計", tt.initialBrand, tt.initialPrice, "2023-01-01")
+			require.NoError(t, err)
+
+			originalID := item.ID
+			originalCategory := item.Category
+			originalPurchaseDate := item.PurchaseDate
+			originalCreatedAt := item.CreatedAt
+			beforeUpdate := item.UpdatedAt
+
+			time.Sleep(1 * time.Millisecond) // UpdatedAt の変更を確認するため
+
+			err = item.UpdatePartial(tt.newName, tt.newBrand, tt.newPrice)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			// 更新後の値をチェック
+			if tt.checkName != "" {
+				assert.Equal(t, tt.checkName, item.Name)
+			}
+			if tt.checkBrand != "" {
+				assert.Equal(t, tt.checkBrand, item.Brand)
+			}
+			if tt.checkPrice != 0 || tt.newPrice != nil {
+				assert.Equal(t, tt.checkPrice, item.PurchasePrice)
+			}
+
+			// 不変フィールドが保持されているかチェック
+			assert.Equal(t, originalID, item.ID)
+			assert.Equal(t, originalCategory, item.Category)
+			assert.Equal(t, originalPurchaseDate, item.PurchaseDate)
+			assert.Equal(t, originalCreatedAt, item.CreatedAt)
+
+			// UpdatedAt が更新されているかチェック
+			if tt.checkUpdated {
+				assert.True(t, item.UpdatedAt.After(beforeUpdate))
+			}
+		})
+	}
+}
+
+func TestItem_UpdatePartial_ImmutableFields(t *testing.T) {
+	// 不変フィールドが保持されることを確認する専用テスト
+	item, err := NewItem("テストアイテム", "時計", "テストブランド", 100000, "2023-01-01")
+	require.NoError(t, err)
+
+	originalID := item.ID
+	originalCategory := item.Category
+	originalPurchaseDate := item.PurchaseDate
+	originalCreatedAt := item.CreatedAt
+
+	// 部分更新を実行
+	newName := "更新された名前"
+	err = item.UpdatePartial(&newName, nil, nil)
+	require.NoError(t, err)
+
+	// 不変フィールドが保持されていることを確認
+	assert.Equal(t, originalID, item.ID, "ID should not change")
+	assert.Equal(t, originalCategory, item.Category, "Category should not change")
+	assert.Equal(t, originalPurchaseDate, item.PurchaseDate, "PurchaseDate should not change")
+	assert.Equal(t, originalCreatedAt, item.CreatedAt, "CreatedAt should not change")
+
+	// 更新可能フィールドが変更されていることを確認
+	assert.Equal(t, "更新された名前", item.Name, "Name should be updated")
+}
+
+func TestItem_UpdatePartial_WhitespaceHandling(t *testing.T) {
+	// 空白文字の処理を確認するテスト
+	item, err := NewItem("テストアイテム", "時計", "テストブランド", 100000, "2023-01-01")
+	require.NoError(t, err)
+
+	// 前後に空白がある名前で更新
+	nameWithSpaces := "  更新された名前  "
+	err = item.UpdatePartial(&nameWithSpaces, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "更新された名前", item.Name, "Whitespace should be trimmed")
+
+	// 前後に空白があるブランドで更新
+	brandWithSpaces := "  更新されたブランド  "
+	err = item.UpdatePartial(nil, &brandWithSpaces, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "更新されたブランド", item.Brand, "Whitespace should be trimmed")
+}
+
+// Helper functions for test
+func stringPtr(s string) *string {
+	return &s
+}
+
+func intPtr(i int) *int {
+	return &i
+}
