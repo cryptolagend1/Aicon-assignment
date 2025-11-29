@@ -92,6 +92,44 @@ func (u *itemUsecase) CreateItem(ctx context.Context, input CreateItemInput) (*e
 	return createdItem, nil
 }
 
+func (u *itemUsecase) UpdateItem(ctx context.Context, id int64, input UpdateItemInput) (*entity.Item, error) {
+	// Validate ID
+	if id <= 0 {
+		return nil, domainErrors.ErrInvalidInput
+	}
+
+	// Check if at least one field is provided
+	if input.Name == nil && input.Brand == nil && input.PurchasePrice == nil {
+		return nil, fmt.Errorf("%w: at least one field (name, brand, purchase_price) must be provided", domainErrors.ErrInvalidInput)
+	}
+
+	// Fetch existing item to check existence and get current values
+	existingItem, err := u.itemRepo.FindByID(ctx, id)
+	if err != nil {
+		if domainErrors.IsNotFoundError(err) {
+			return nil, domainErrors.ErrItemNotFound
+		}
+		return nil, fmt.Errorf("failed to retrieve item: %w", err)
+	}
+
+	// Apply partial update using entity method
+	// This validates only the fields being updated
+	if err := existingItem.UpdatePartial(input.Name, input.Brand, input.PurchasePrice); err != nil {
+		return nil, fmt.Errorf("%w: %s", domainErrors.ErrInvalidInput, err.Error())
+	}
+
+	// Update in repository
+	updatedItem, err := u.itemRepo.Update(ctx, id, existingItem)
+	if err != nil {
+		if domainErrors.IsNotFoundError(err) {
+			return nil, domainErrors.ErrItemNotFound
+		}
+		return nil, fmt.Errorf("failed to update item: %w", err)
+	}
+
+	return updatedItem, nil
+}
+
 func (u *itemUsecase) DeleteItem(ctx context.Context, id int64) error {
 	if id <= 0 {
 		return domainErrors.ErrInvalidInput
